@@ -1,0 +1,495 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "The AWS CloudFormation template for this Serverless application",
+  "Resources": {
+    "ServerlessDeploymentBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ServerlessDeploymentBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "ServerlessDeploymentBucket"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition"
+                      },
+                      ":s3:::",
+                      {
+                        "Ref": "ServerlessDeploymentBucket"
+                      },
+                      "/*"
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition"
+                      },
+                      ":s3:::",
+                      {
+                        "Ref": "ServerlessDeploymentBucket"
+                      }
+                    ]
+                  ]
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": false
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ExternalMessageLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/core-service-dev-externalMessage"
+      }
+    },
+    "GetDataLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/core-service-dev-getData"
+      }
+    },
+    "IamRoleLambdaExecution": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Join": [
+                "-",
+                [
+                  "core-service",
+                  "dev",
+                  "lambda"
+                ]
+              ]
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:CreateLogGroup"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/core-service-dev*:*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/core-service-dev*:*:*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:*"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:Encrypt"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Path": "/",
+        "RoleName": {
+          "Fn::Join": [
+            "-",
+            [
+              "core-service",
+              "dev",
+              {
+                "Ref": "AWS::Region"
+              },
+              "lambdaRole"
+            ]
+          ]
+        }
+      }
+    },
+    "ExternalMessageLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "S3Bucket": {
+            "Ref": "ServerlessDeploymentBucket"
+          },
+          "S3Key": "serverless/core-service/dev/1653803613725-2022-05-29T05:53:33.725Z/core-service.zip"
+        },
+        "Handler": "src/index.externalMessage",
+        "Runtime": "nodejs12.x",
+        "FunctionName": "core-service-dev-externalMessage",
+        "MemorySize": 1024,
+        "Timeout": 300,
+        "Role": {
+          "Fn::GetAtt": [
+            "IamRoleLambdaExecution",
+            "Arn"
+          ]
+        }
+      },
+      "DependsOn": [
+        "ExternalMessageLogGroup"
+      ]
+    },
+    "GetDataLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "S3Bucket": {
+            "Ref": "ServerlessDeploymentBucket"
+          },
+          "S3Key": "serverless/core-service/dev/1653803613725-2022-05-29T05:53:33.725Z/core-service.zip"
+        },
+        "Handler": "src/index.getData",
+        "Runtime": "nodejs12.x",
+        "FunctionName": "core-service-dev-getData",
+        "MemorySize": 1024,
+        "Timeout": 300,
+        "Role": {
+          "Fn::GetAtt": [
+            "IamRoleLambdaExecution",
+            "Arn"
+          ]
+        }
+      },
+      "DependsOn": [
+        "GetDataLogGroup"
+      ]
+    },
+    "ExternalMessageLambdaVersionBESRd49JjR1Q3qn5E9hHXbJ5cpGvdia7WY5AaQUuWw": {
+      "Type": "AWS::Lambda::Version",
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ExternalMessageLambdaFunction"
+        },
+        "CodeSha256": "7apYSKa0m4WVyOScPjvY0D0SlPiiYZUYSjhsuIRyF3g="
+      }
+    },
+    "GetDataLambdaVersionUKIu51ogfWDde4WHHRYGfqewWwSZI31lQ7gDwX7Qw": {
+      "Type": "AWS::Lambda::Version",
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "GetDataLambdaFunction"
+        },
+        "CodeSha256": "7apYSKa0m4WVyOScPjvY0D0SlPiiYZUYSjhsuIRyF3g="
+      }
+    },
+    "ProviderAppSyncLambdaServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "Lambda-ProviderAppSyncServiceRole",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "appsync.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "Lambda-ProviderAppSyncServiceRole-Policy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:invokeFunction"
+                  ],
+                  "Resource": [
+                    "*"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "GraphQlApi": {
+      "Type": "AWS::AppSync::GraphQLApi",
+      "Properties": {
+        "Name": "core-service-dev-appsync",
+        "AuthenticationType": "API_KEY",
+        "AdditionalAuthenticationProviders": [],
+        "XrayEnabled": false
+      }
+    },
+    "GraphQlApiKeyDefault": {
+      "Type": "AWS::AppSync::ApiKey",
+      "Properties": {
+        "ApiId": {
+          "Fn::GetAtt": [
+            "GraphQlApi",
+            "ApiId"
+          ]
+        },
+        "Description": "Auto-generated api key",
+        "Expires": 1685336400
+      }
+    },
+    "GraphQlSchema": {
+      "Type": "AWS::AppSync::GraphQLSchema",
+      "Properties": {
+        "Definition": "schema {\n  mutation: Mutation\n  subscription: Subscription\n  query: Query\n}\n\ntype Mutation @aws_api_key @aws_iam @aws_lambda {\n  externalMessage(inputMessage: InputMessage): Message\n}\n\ntype Subscription @aws_lambda @aws_api_key @aws_iam {\n  onMessageReceived(id: String): Message @aws_lambda @aws_api_key @aws_iam @aws_subscribe(mutations: [\"externalMessage\"])\n}\n\ntype Message @aws_api_key @aws_iam @aws_lambda {\n  id: String!\n  message: String\n}\n\ninput InputMessage {\n  id: String\n  message: String\n}\n\ntype GetDataResponse {\n  name: String\n  freeText: String\n}\n\ntype Query {\n  getData: GetDataResponse\n}",
+        "ApiId": {
+          "Fn::GetAtt": [
+            "GraphQlApi",
+            "ApiId"
+          ]
+        }
+      }
+    },
+    "GraphQlDsexternalMessageDataSource": {
+      "Type": "AWS::AppSync::DataSource",
+      "Properties": {
+        "ApiId": {
+          "Fn::GetAtt": [
+            "GraphQlApi",
+            "ApiId"
+          ]
+        },
+        "Name": "externalMessageDataSource",
+        "Description": "externalMessage data source",
+        "Type": "AWS_LAMBDA",
+        "ServiceRoleArn": {
+          "Fn::GetAtt": [
+            "ProviderAppSyncLambdaServiceRole",
+            "Arn"
+          ]
+        },
+        "LambdaConfig": {
+          "LambdaFunctionArn": {
+            "Fn::GetAtt": [
+              "ExternalMessageLambdaFunction",
+              "Arn"
+            ]
+          }
+        }
+      }
+    },
+    "GraphQlDsgetDataDataSource": {
+      "Type": "AWS::AppSync::DataSource",
+      "Properties": {
+        "ApiId": {
+          "Fn::GetAtt": [
+            "GraphQlApi",
+            "ApiId"
+          ]
+        },
+        "Name": "getDataDataSource",
+        "Description": "getData data source",
+        "Type": "AWS_LAMBDA",
+        "ServiceRoleArn": {
+          "Fn::GetAtt": [
+            "ProviderAppSyncLambdaServiceRole",
+            "Arn"
+          ]
+        },
+        "LambdaConfig": {
+          "LambdaFunctionArn": {
+            "Fn::GetAtt": [
+              "GetDataLambdaFunction",
+              "Arn"
+            ]
+          }
+        }
+      }
+    },
+    "GraphQlResolverMutationexternalMessage": {
+      "Type": "AWS::AppSync::Resolver",
+      "DependsOn": "GraphQlSchema",
+      "Properties": {
+        "ApiId": {
+          "Fn::GetAtt": [
+            "GraphQlApi",
+            "ApiId"
+          ]
+        },
+        "TypeName": "Mutation",
+        "FieldName": "externalMessage",
+        "RequestMappingTemplate": "{\n    \"version\": \"2017-02-28\",\n    \"operation\": \"Invoke\",\n    \"payload\": {\n        \"field\": \"externalMessage\",\n        \"arguments\":  $utils.toJson($context.arguments),\n        \"handle\" : $utils.toJson($context.identity.username)\n    }\n}",
+        "ResponseMappingTemplate": "$util.toJson($context.result)",
+        "Kind": "UNIT",
+        "DataSourceName": {
+          "Fn::GetAtt": [
+            "GraphQlDsexternalMessageDataSource",
+            "Name"
+          ]
+        }
+      }
+    },
+    "GraphQlResolverQuerygetData": {
+      "Type": "AWS::AppSync::Resolver",
+      "DependsOn": "GraphQlSchema",
+      "Properties": {
+        "ApiId": {
+          "Fn::GetAtt": [
+            "GraphQlApi",
+            "ApiId"
+          ]
+        },
+        "TypeName": "Query",
+        "FieldName": "getData",
+        "RequestMappingTemplate": "{\n    \"version\": \"2017-02-28\",\n    \"operation\": \"Invoke\",\n    \"payload\": {\n        \"field\": \"getData\",\n        \"arguments\":  $utils.toJson($context.arguments),\n        \"handle\" : $utils.toJson($context.identity.username)\n    }\n}",
+        "ResponseMappingTemplate": "$util.toJson($context.result)",
+        "Kind": "UNIT",
+        "DataSourceName": {
+          "Fn::GetAtt": [
+            "GraphQlDsgetDataDataSource",
+            "Name"
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ServerlessDeploymentBucketName": {
+      "Value": {
+        "Ref": "ServerlessDeploymentBucket"
+      },
+      "Export": {
+        "Name": "sls-core-service-dev-ServerlessDeploymentBucketName"
+      }
+    },
+    "ExternalMessageLambdaFunctionQualifiedArn": {
+      "Description": "Current Lambda function version",
+      "Value": {
+        "Ref": "ExternalMessageLambdaVersionBESRd49JjR1Q3qn5E9hHXbJ5cpGvdia7WY5AaQUuWw"
+      },
+      "Export": {
+        "Name": "sls-core-service-dev-ExternalMessageLambdaFunctionQualifiedArn"
+      }
+    },
+    "GetDataLambdaFunctionQualifiedArn": {
+      "Description": "Current Lambda function version",
+      "Value": {
+        "Ref": "GetDataLambdaVersionUKIu51ogfWDde4WHHRYGfqewWwSZI31lQ7gDwX7Qw"
+      },
+      "Export": {
+        "Name": "sls-core-service-dev-GetDataLambdaFunctionQualifiedArn"
+      }
+    },
+    "GraphQlApiKeyDefault": {
+      "Value": {
+        "Fn::GetAtt": [
+          "GraphQlApiKeyDefault",
+          "ApiKey"
+        ]
+      }
+    },
+    "GraphQlApiId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "GraphQlApi",
+          "ApiId"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GraphQlApiId"
+        }
+      }
+    },
+    "GraphQlApiUrl": {
+      "Value": {
+        "Fn::GetAtt": [
+          "GraphQlApi",
+          "GraphQLUrl"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GraphQlApiUrl"
+        }
+      }
+    }
+  }
+}

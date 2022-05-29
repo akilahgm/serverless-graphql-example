@@ -1,0 +1,122 @@
+service: core-service
+
+plugins:
+  - serverless-appsync-plugin
+  - serverless-offline
+
+package:
+  patterns:
+    - src/**
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  stage: ${opt:stage, "dev"}
+  region: ${opt:region, "ap-southeast-1"}
+  timeout: 300
+  lambdaHashingVersion: 20201221
+  # apiGateway:
+  #   apiKeys:
+  #     - ${self:service}-${self:provider.stage}-internal
+  # vpc:
+  #   securityGroupIds:
+  #     - ${self:custom.${self:provider.stage}.SG_1}
+  #   subnetIds:
+  #     - ${self:custom.${self:provider.stage}.SUBNET_1}
+  #     - ${self:custom.${self:provider.stage}.SUBNET_2}
+  #     - ${self:custom.${self:provider.stage}.SUBNET_3}
+  iam:
+    role:
+      statements:
+        - Effect: "Allow"
+          Action:
+            - "s3:*"
+          Resource: "*"
+        - Effect: Allow
+          Action:
+            - secretsmanager:GetSecretValue
+          Resource: "*"
+        - Effect: "Allow"
+          Action:
+            - "kms:Decrypt"
+            - "kms:Encrypt"
+          Resource: "*"
+
+functions:
+  externalMessage:
+    handler: src/index.externalMessage
+  getData:
+    handler: src/index.getData
+
+custom:
+  base: ${self:service}-${self:provider.stage}
+  serverless-offline:
+    httpPort: 4300
+    lambdaPort: 4317
+
+  appSync:
+    name: ${self:custom.base}-appsync
+    authenticationType: API_KEY
+    # authenticationType: AWS_LAMBDA
+    # lambdaAuthorizerConfig:
+    #   lambdaFunctionArn: ${self:custom.${self:provider.stage}.AUTHORIZATION_LAMBDA_ARN}
+    #   authorizerResultTtlInSeconds: 0
+    # additionalAuthenticationProviders:
+    #   - authenticationType: AWS_IAM
+    #   - authenticationType: API_KEY
+    serviceRole: "ProviderAppSyncServiceRole"
+    mappingTemplatesLocation: mapping-templates
+    mappingTemplates:
+      - dataSource: externalMessageDataSource
+        type: Mutation
+        field: externalMessage
+        request: "Mutation.externalMessage.request.txt"
+        response: "Mutation.externalMessage.response.txt"
+      - dataSource: getDataDataSource
+        type: Query
+        field: getData
+        request: "Query.getData.request.txt"
+        response: "Query.getData.response.txt"
+    dataSources:
+      - type: AWS_LAMBDA
+        name: externalMessageDataSource
+        description: "externalMessage data source"
+        config:
+          functionName: externalMessage
+          lambdaFunctionArn: { Fn::GetAtt: [ExternalMessageLambdaFunction, Arn] }
+          serviceRoleArn: { Fn::GetAtt: [ProviderAppSyncLambdaServiceRole, Arn] }
+      - type: AWS_LAMBDA
+        name: getDataDataSource
+        description: "getData data source"
+        config:
+          functionName: getData
+          lambdaFunctionArn: { Fn::GetAtt: [GetDataLambdaFunction, Arn] }
+          serviceRoleArn: { Fn::GetAtt: [ProviderAppSyncLambdaServiceRole, Arn] }
+
+resources:
+  Resources:
+    ProviderAppSyncLambdaServiceRole:
+      Type: "AWS::IAM::Role"
+      Properties:
+        RoleName: "Lambda-${self:custom.appSync.serviceRole}"
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - "appsync.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+        Policies:
+          - PolicyName: "Lambda-${self:custom.appSync.serviceRole}-Policy"
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - "lambda:invokeFunction"
+                  Resource:
+                    - "*"

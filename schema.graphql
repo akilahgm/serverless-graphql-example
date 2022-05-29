@@ -1,0 +1,36 @@
+schema {
+  mutation: Mutation
+  subscription: Subscription
+  query: Query
+}
+
+type Mutation @aws_api_key @aws_iam @aws_lambda {
+  externalMessage(inputMessage: InputMessage): Message
+}
+
+type Subscription @aws_lambda @aws_api_key @aws_iam {
+  onMessageReceived(id: String): Message
+    @aws_lambda
+    @aws_api_key
+    @aws_iam
+    @aws_subscribe(mutations: ["externalMessage"])
+}
+
+type Message @aws_api_key @aws_iam @aws_lambda {
+  id: String!
+  message: String
+}
+
+input InputMessage {
+  id: String
+  message: String
+}
+
+type GetDataResponse {
+  name: String
+  freeText: String
+}
+
+type Query {
+  getData: GetDataResponse
+}
